@@ -1,7 +1,6 @@
 import logging
 from typing import Dict, Tuple
 import pandas as pd
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -255,7 +254,7 @@ def create_subcategories_df(
     remaining_cols = [c for c in df_merged.columns if c not in existing_cols]
 
     df_result = df_merged[existing_cols + remaining_cols].copy()
-    
+
     # Ordenar por categoría y subcategoría
     if "category_id" in df_result.columns and "subcategory_id" in df_result.columns:
         df_result = df_result.sort_values(by=["category_id", "subcategory_id"]).reset_index(drop=True)

@@ -27,12 +27,12 @@ def load_dataframe_to_table(
     Sube un DataFrame a una tabla específica en BigQuery.
     """
     full_table_id = f"{client.project}.{dataset_id}.{table_name}"
-    
+
     job_config = bigquery.LoadJobConfig(
         write_disposition=write_disposition,
         autodetect=True
     )
-    
+
     logger.debug(f"Iniciando carga a BigQuery: {full_table_id} ({df.shape[0]} registros)...")
     job = client.load_table_from_dataframe(df, full_table_id, job_config=job_config)
     job.result()  # Espera a que termine la carga
@@ -54,7 +54,7 @@ def load_dataframes_to_bigquery(
       - df_movements     -> ft_budget_movements
       - df_payments      -> ft_budget_payments
       - df_subcategories -> dim_budget_subcategories
-      
+
     Args:
         df_movements: DataFrame de movimientos presupuestados.
         df_payments: DataFrame del calendario de pagos (1:N).
@@ -63,7 +63,7 @@ def load_dataframes_to_bigquery(
         dataset_id: Nombre del dataset destino (por defecto 'finance_silver_layer').
         write_disposition: 'WRITE_TRUNCATE' para sobreescribir o 'WRITE_APPEND' para agregar.
         key_path: Ruta opcional a service_account.json.
-        
+
     Returns:
         Dict[str, str]: Mapeo de tabla destino y estado de carga.
     """

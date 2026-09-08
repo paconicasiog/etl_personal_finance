@@ -24,7 +24,7 @@ def main():
     try:
         logger.info("=== Iniciando Proceso de Extracción y Transformación ===")
         df_movements, df_payments, df_subcategories = get_budget_dataframes()
-        
+
         logger.info("\n=== Iniciando Carga a BigQuery (Silver Layer) ===")
         uploaded_tables = load_dataframes_to_bigquery(
             df_movements=df_movements,
@@ -33,7 +33,7 @@ def main():
             dataset_id="finance_silver_layer",
             write_disposition="WRITE_TRUNCATE"
         )
-        
+
         print("\n" + "=" * 65)
         print("   RESUMEN DE CARGA EN BIGQUERY - SILVER LAYER")
         print("=" * 65)
@@ -41,7 +41,7 @@ def main():
         for tbl_name, full_path in uploaded_tables.items():
             print(f"      • {tbl_name:<25} ──► `{full_path}`")
         print("=" * 65 + "\n")
-        
+
     except Exception as e:
         logger.error(f"Error durante la carga a BigQuery: {e}", exc_info=True)
         sys.exit(1)
