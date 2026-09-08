@@ -93,11 +93,6 @@ def create_movements_df(
     mov["installments"] = pd.to_numeric(mov["installments"], errors="coerce").fillna(1).astype(int)
     mov["movement_date"] = pd.to_datetime(mov["budget_movement_date"], errors="coerce")
 
-    # Dimensiones adicionales de fecha
-    mov["movement_year"] = mov["movement_date"].dt.year
-    mov["movement_month"] = mov["movement_date"].dt.month
-    mov["movement_year_month"] = mov["movement_date"].dt.strftime("%Y-%m")
-
     # Preparar dimensiones limpias
     cat_clean = clean_categories(df_categories)
     subcat_clean = clean_subcategories(df_subcategories)
@@ -106,23 +101,21 @@ def create_movements_df(
     # Merges
     # 1. Merge con Categories
     mov = mov.merge(
-        cat_clean[["category_id", "category_name", "category_is_active"]],
+        cat_clean[["category_id", "category_name"]],
         on="category_id",
         how="left"
     )
 
     # 2. Merge con Subcategories
-    subcat_cols = ["subcategory_id", "subcategory_name", "subcategory_description", "subcategory_is_active"]
-    subcat_cols_present = [c for c in subcat_cols if c in subcat_clean.columns]
     mov = mov.merge(
-        subcat_clean[subcat_cols_present],
+        subcat_clean[["subcategory_id", "subcategory_name"]],
         on="subcategory_id",
         how="left"
     )
 
     # 3. Merge con Payment Methods
     mov = mov.merge(
-        pm_clean,
+        pm_clean[["payment_method_id", "payment_method_name"]],
         left_on="payment_method_uid",
         right_on="payment_method_id",
         how="left"
@@ -133,17 +126,13 @@ def create_movements_df(
         "id": "movement_id",
         "type": "movement_type",
         "movement_description": "movement_description",
-        "amount": "movement_amount",
-        "payment_method_uid": "payment_method_id_orig"
+        "amount": "movement_amount"
     })
 
     cols_order = [
         "movement_id",
         "movement_type",
         "movement_date",
-        "movement_year_month",
-        "movement_year",
-        "movement_month",
         "movement_description",
         "movement_amount",
         "installments",
@@ -151,21 +140,12 @@ def create_movements_df(
         "category_name",
         "subcategory_id",
         "subcategory_name",
-        "subcategory_description",
         "payment_method_id",
-        "payment_method_name",
-        "payment_method_type",
-        "day_period_cut",
-        "payment_day",
-        "category_is_active",
-        "subcategory_is_active",
-        "payment_method_is_active"
+        "payment_method_name"
     ]
 
     existing_cols = [c for c in cols_order if c in mov.columns]
-    remaining_cols = [c for c in mov.columns if c not in existing_cols and c != "budget_movement_date" and c != "payment_method_id_orig"]
-
-    df_result = mov[existing_cols + remaining_cols].copy()
+    df_result = mov[existing_cols].copy()
     logger.debug(f"Tabla 'movements' creada: {df_result.shape[0]} filas, {df_result.shape[1]} columnas.")
     return df_result
 
@@ -191,35 +171,22 @@ def create_payments_df(
     pay["payment_amount"] = pd.to_numeric(pay["amount"], errors="coerce").fillna(0.0)
     pay["payment_date"] = pd.to_datetime(pay["payment_date"], errors="coerce")
 
-    # Dimensiones de fecha de pago
-    pay["payment_year"] = pay["payment_date"].dt.year
-    pay["payment_month"] = pay["payment_date"].dt.month
-    pay["payment_year_month"] = pay["payment_date"].dt.strftime("%Y-%m")
-
     pay = pay.rename(columns={
         "id": "payment_id",
         "description": "payment_description"
     })
 
-    # Merge con la tabla enriquecida de movimientos
+    # Merge con la tabla de movimientos
     mov_cols_to_merge = [
         "movement_id",
         "movement_type",
         "movement_date",
-        "movement_year_month",
-        "movement_description",
-        "movement_amount",
-        "installments",
         "category_id",
         "category_name",
         "subcategory_id",
         "subcategory_name",
-        "subcategory_description",
         "payment_method_id",
-        "payment_method_name",
-        "payment_method_type",
-        "day_period_cut",
-        "payment_day"
+        "payment_method_name"
     ]
     mov_cols_present = [c for c in mov_cols_to_merge if c in df_movements.columns]
 
@@ -227,8 +194,7 @@ def create_payments_df(
         df_movements[mov_cols_present],
         left_on="budget_movement_id",
         right_on="movement_id",
-        how="left",
-        suffixes=("", "_mov")
+        how="left"
     )
 
     # Ordenamiento lógico de columnas
@@ -236,32 +202,20 @@ def create_payments_df(
         "payment_id",
         "budget_movement_id",
         "payment_date",
-        "payment_year_month",
-        "payment_year",
-        "payment_month",
         "payment_amount",
         "payment_description",
-        "movement_description",
         "movement_type",
         "movement_date",
-        "movement_amount",
-        "installments",
         "category_id",
         "category_name",
         "subcategory_id",
         "subcategory_name",
-        "subcategory_description",
         "payment_method_id",
-        "payment_method_name",
-        "payment_method_type",
-        "day_period_cut",
-        "payment_day"
+        "payment_method_name"
     ]
 
     existing_cols = [c for c in cols_order if c in df_merged.columns]
-    remaining_cols = [c for c in df_merged.columns if c not in existing_cols and c != "amount" and c != "movement_id"]
-
-    df_result = df_merged[existing_cols + remaining_cols].copy()
+    df_result = df_merged[existing_cols].copy()
 
     # Ordenar por fecha de pago y movimiento
     if "payment_date" in df_result.columns:
@@ -270,10 +224,50 @@ def create_payments_df(
     logger.debug(f"Tabla 'payments' creada: {df_result.shape[0]} filas, {df_result.shape[1]} columnas.")
     return df_result
 
-def transform_budget_data(raw_tables: Dict[str, pd.DataFrame]) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def create_subcategories_df(
+    df_raw_subcategories: pd.DataFrame,
+    df_raw_categories: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Transforma y unifica las subcategorías con la información de sus categorías correspondientes.
+    """
+    logger.debug("Transformando tabla de subcategorías con categorías...")
+    subcat_clean = clean_subcategories(df_raw_subcategories)
+    cat_clean = clean_categories(df_raw_categories)
+
+    df_merged = subcat_clean.merge(
+        cat_clean,
+        on="category_id",
+        how="left"
+    )
+
+    cols_order = [
+        "subcategory_id",
+        "subcategory_name",
+        "subcategory_description",
+        "subcategory_is_active",
+        "category_id",
+        "category_name",
+        "category_type",
+        "category_is_active"
+    ]
+    existing_cols = [c for c in cols_order if c in df_merged.columns]
+    remaining_cols = [c for c in df_merged.columns if c not in existing_cols]
+
+    df_result = df_merged[existing_cols + remaining_cols].copy()
+    
+    # Ordenar por categoría y subcategoría
+    if "category_id" in df_result.columns and "subcategory_id" in df_result.columns:
+        df_result = df_result.sort_values(by=["category_id", "subcategory_id"]).reset_index(drop=True)
+
+    logger.debug(f"Tabla 'subcategories' creada: {df_result.shape[0]} filas, {df_result.shape[1]} columnas.")
+    return df_result
+
+def transform_budget_data(raw_tables: Dict[str, pd.DataFrame]) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Función orquestadora de transformación.
-    Recibe el diccionario de tablas crudas y retorna la tupla (df_movements, df_payments).
+    Recibe el diccionario de tablas crudas y retorna la tupla:
+    (df_movements, df_payments, df_subcategories)
     """
     df_movements = create_movements_df(
         df_raw_movements=raw_tables["budget_movements"],
@@ -287,4 +281,9 @@ def transform_budget_data(raw_tables: Dict[str, pd.DataFrame]) -> Tuple[pd.DataF
         df_movements=df_movements
     )
 
-    return df_movements, df_payments
+    df_subcategories = create_subcategories_df(
+        df_raw_subcategories=raw_tables["subcategories"],
+        df_raw_categories=raw_tables["categories"]
+    )
+
+    return df_movements, df_payments, df_subcategories
