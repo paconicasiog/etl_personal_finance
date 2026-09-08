@@ -5,10 +5,11 @@ Script para ejecutar el pipeline ETL y cargar los DataFrames resultantes a BigQu
   - df_payments      -> `finance_silver_layer.ft_budget_payments`
   - df_subcategories -> `finance_silver_layer.dim_budget_subcategories`
 """
-import sys
 import logging
-from main import get_budget_dataframes
+import sys
+
 from apps.loader import load_dataframes_to_bigquery
+from main import get_budget_dataframes
 
 # Configuración de logging limpio
 logging.basicConfig(
@@ -43,7 +44,7 @@ def main():
         print("=" * 65 + "\n")
 
     except Exception as e:
-        logger.error(f"Error durante la carga a BigQuery: {e}", exc_info=True)
+        logger.exception(f"Error durante la carga a BigQuery: {e}")
         sys.exit(1)
 
 

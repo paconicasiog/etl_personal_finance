@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Tuple
+
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -262,7 +262,7 @@ def create_subcategories_df(
     logger.debug(f"Tabla 'subcategories' creada: {df_result.shape[0]} filas, {df_result.shape[1]} columnas.")
     return df_result
 
-def transform_budget_data(raw_tables: Dict[str, pd.DataFrame]) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def transform_budget_data(raw_tables: dict[str, pd.DataFrame]) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Función orquestadora de transformación.
     Recibe el diccionario de tablas crudas y retorna la tupla:

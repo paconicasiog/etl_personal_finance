@@ -1,7 +1,8 @@
 import logging
-from typing import Optional, Dict
-import pandas as pd
+
 from google.cloud import bigquery
+import pandas as pd
+
 from acceso.bq_client import get_bigquery_client
 
 logger = logging.getLogger(__name__)
@@ -44,11 +45,11 @@ def load_dataframes_to_bigquery(
     df_movements: pd.DataFrame,
     df_payments: pd.DataFrame,
     df_subcategories: pd.DataFrame,
-    client: Optional[bigquery.Client] = None,
+    client: bigquery.Client | None = None,
     dataset_id: str = DEFAULT_DATASET_ID,
     write_disposition: str = "WRITE_TRUNCATE",
-    key_path: Optional[str] = None
-) -> Dict[str, str]:
+    key_path: str | None = None
+) -> dict[str, str]:
     """
     Sube los tres DataFrames transformados a BigQuery en el dataset especificado:
       - df_movements     -> ft_budget_movements
@@ -65,7 +66,7 @@ def load_dataframes_to_bigquery(
         key_path: Ruta opcional a service_account.json.
 
     Returns:
-        Dict[str, str]: Mapeo de tabla destino y estado de carga.
+        dict[str, str]: Mapeo de tabla destino y estado de carga.
     """
     if client is None:
         client = get_bigquery_client(key_path=key_path)

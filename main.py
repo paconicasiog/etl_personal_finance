@@ -7,15 +7,15 @@ aplica transformaciones y unificaciones de datos, y carga a BigQuery (Silver Lay
 2. payments      -> `finance_silver_layer.ft_budget_payments`
 3. subcategories -> `finance_silver_layer.dim_budget_subcategories`
 """
-import sys
 import logging
-from typing import Tuple, Optional, Dict
+import sys
+
 import pandas as pd
 
 from acceso.bq_client import get_bigquery_client
 from apps.extractor import extract_raw_tables
-from apps.transformer import transform_budget_data
 from apps.loader import load_dataframes_to_bigquery
+from apps.transformer import transform_budget_data
 
 # Configuración de logging limpio
 logging.basicConfig(
@@ -30,8 +30,8 @@ logger = logging.getLogger("ETL_PersonalFinance")
 def run_pipeline(
     upload_to_bq: bool = True,
     dataset_id: str = "finance_silver_layer",
-    key_path: Optional[str] = None
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, Optional[Dict[str, str]]]:
+    key_path: str | None = None
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, str] | None]:
     """
     Ejecuta el pipeline completo de ETL:
       1. Conexión a BigQuery / Google Sheets
@@ -45,7 +45,7 @@ def run_pipeline(
         key_path: Ruta opcional al archivo service_account.json.
 
     Returns:
-        Tuple: (df_movements, df_payments, df_subcategories, uploaded_tables)
+        tuple: (df_movements, df_payments, df_subcategories, uploaded_tables)
     """
     logger.info("Iniciando Pipeline ETL de Presupuesto Personal...")
 
@@ -81,8 +81,8 @@ def run_pipeline(
 
 
 def get_budget_dataframes(
-    key_path: Optional[str] = None
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    key_path: str | None = None
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Ejecuta la extracción y transformación retornando los DataFrames en memoria sin subir a BQ.
     Ideal para importar en Jupyter Notebooks o análisis exploratorio (EDA).
@@ -98,7 +98,7 @@ def print_summary(
     df_movements: pd.DataFrame,
     df_payments: pd.DataFrame,
     df_subcategories: pd.DataFrame,
-    uploaded_tables: Optional[Dict[str, str]] = None
+    uploaded_tables: dict[str, str] | None = None
 ) -> None:
     """
     Imprime un resumen visual ejecutivo del resultado de los DataFrames generados y cargados.
@@ -147,7 +147,7 @@ def main():
         df_movements, df_payments, df_subcategories, uploaded_tables = run_pipeline(upload_to_bq=True)
         print_summary(df_movements, df_payments, df_subcategories, uploaded_tables)
     except Exception as e:
-        logger.error(f"Error durante la ejecución del pipeline: {e}", exc_info=True)
+        logger.exception(f"Error durante la ejecución del pipeline: {e}")
         sys.exit(1)
 
 

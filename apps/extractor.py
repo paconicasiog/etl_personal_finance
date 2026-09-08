@@ -1,8 +1,9 @@
 import logging
-from typing import Dict, Optional
-import pandas as pd
+
 from google.cloud import bigquery
-from acceso.bq_client import get_bigquery_client, execute_query
+import pandas as pd
+
+from acceso.bq_client import execute_query, get_bigquery_client
 
 logger = logging.getLogger(__name__)
 
@@ -16,9 +17,9 @@ SQL_QUERIES = {
 }
 
 def extract_raw_tables(
-    client: Optional[bigquery.Client] = None,
-    key_path: Optional[str] = None
-) -> Dict[str, pd.DataFrame]:
+    client: bigquery.Client | None = None,
+    key_path: str | None = None
+) -> dict[str, pd.DataFrame]:
     """
     Ejecuta las consultas SQL hacia BigQuery y retorna un diccionario
     con los DataFrames crudos de cada tabla.
@@ -26,7 +27,7 @@ def extract_raw_tables(
     if client is None:
         client = get_bigquery_client(key_path=key_path)
 
-    raw_tables: Dict[str, pd.DataFrame] = {}
+    raw_tables: dict[str, pd.DataFrame] = {}
 
     for table_name, query in SQL_QUERIES.items():
         logger.debug(f"Extrayendo tabla '{table_name}'...")
