@@ -1,9 +1,9 @@
-import os
 import logging
-from typing import Optional, List
-import pandas as pd
+import os
+
 from google.cloud import bigquery
 from google.oauth2 import service_account
+import pandas as pd
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ DEFAULT_SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
 ]
 
-def resolve_key_path(key_path: Optional[str] = None) -> str:
+def resolve_key_path(key_path: str | None = None) -> str:
     """
     Resuelve la ruta absoluta al archivo de credenciales de Service Account.
     """
@@ -40,8 +40,8 @@ def resolve_key_path(key_path: Optional[str] = None) -> str:
     )
 
 def get_bigquery_client(
-    key_path: Optional[str] = None,
-    scopes: Optional[List[str]] = None
+    key_path: str | None = None,
+    scopes: list[str] | None = None
 ) -> bigquery.Client:
     """
     Crea y retorna un cliente de BigQuery autenticado con Service Account y los scopes necesarios.
@@ -63,8 +63,8 @@ def get_bigquery_client(
 
 def execute_query(
     query: str,
-    client: Optional[bigquery.Client] = None,
-    key_path: Optional[str] = None
+    client: bigquery.Client | None = None,
+    key_path: str | None = None
 ) -> pd.DataFrame:
     """
     Ejecuta una consulta SQL en BigQuery y retorna el resultado como un DataFrame de Pandas.
