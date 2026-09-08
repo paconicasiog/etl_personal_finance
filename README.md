@@ -1,15 +1,15 @@
-# ETL Personal Finance
+# ETL Personal Finance (Silver Layer Pipeline)
 
-Pipeline de extracción, transformación y unificación de datos presupuestarios personales desde Google BigQuery (tablas externas enlazadas a Google Sheets) utilizando autenticación mediante Service Account.
+Pipeline integral de extracción, transformación y carga (ETL) de finanzas personales. Extrae datos de Google BigQuery respaldados por Google Sheets (dataset `fincasio_v2`), unifica y limpia las dimensiones de movimientos, pagos y subcategorías, y carga los DataFrames resultantes a la capa Silver en BigQuery (dataset `finance_silver_layer`).
 
 ---
 
 ## 🎯 Objetivo
 
-Generar tres DataFrames estructurados, limpios y listos para análisis exploratorio (EDA):
-1. **`movements`**: Movimientos de ingresos y gastos presupuestados, enriquecidos con sus categorías, subcategorías y métodos de pago.
-2. **`payments`**: Calendario de pagos (relación 1:N respecto a los movimientos, ej. compras a meses o cuotas), donde cada pago hereda el contexto de su movimiento origen.
-3. **`subcategories`**: Catálogo enriquecido resultante de la unión de subcategorías con sus categorías correspondientes.
+Generar tres modelos de datos analíticos limpios y cargarlos automáticamente a BigQuery:
+1. **`ft_budget_movements`** (Tabla de Hechos): Movimientos de ingresos y gastos presupuestados enriquecidos con categorías, subcategorías y métodos de pago.
+2. **`ft_budget_payments`** (Tabla de Hechos): Calendario de pagos individuales en relación **1:N** con los movimientos (por ejemplo compras a meses o pagos en cuotas), donde cada pago hereda el contexto de su movimiento origen.
+3. **`dim_budget_subcategories`** (Tabla de Dimensión): Catálogo detallado de subcategorías unificadas con sus respectivas categorías.
 
 ---
 
@@ -23,33 +23,35 @@ etl_personal_finance/
 ├── apps/
 │   ├── __init__.py
 │   ├── extractor.py              # Extracción de tablas fuente desde BigQuery
-│   └── transformer.py            # Limpieza, unificación y creación de los 3 DataFrames
+│   ├── transformer.py            # Limpieza, formateo de tipos y unificación de DataFrames
+│   └── loader.py                 # Carga de DataFrames a BigQuery (Silver Layer)
 ├── tests/
 │   ├── __init__.py
 │   └── test_pipeline.py          # Pruebas unitarias de integridad 1:N, tipos y columnas
-├── main.py                       # Orquestador del pipeline y reporte ejecutivo
+├── main.py                       # Orquestador principal del pipeline (ETL + Carga a BQ)
+├── upload_to_bq.py               # Script dedicado para ejecución y carga a la capa Silver
 ├── requirements.txt              # Dependencias de Python
 ├── service_account.json          # Credenciales del Service Account de Google Cloud
-└── README.md                     # Documentación técnica
+└── README.md                     # Documentación técnica del proyecto
 ```
 
 ---
 
 ## ⚙️ ¿Cómo Funciona el Proceso?
 
-El pipeline se ejecuta en 3 etapas secuenciales:
+El pipeline se ejecuta en 4 etapas secuenciales:
 
 ```
-[1/3] Conexión BigQuery  ───►  [2/3] Extracción SQL  ───►  [3/3] Transformación & Joins  ───►  Resultados (DataFrames)
- (Service Account + Scopes)       (5 Tablas Fuente)           (movements, payments, subcat)      (Listos para EDA)
+[1/4] Conexión BigQuery ──► [2/4] Extracción SQL ──► [3/4] Transformación & Joins ──► [4/4] Carga Silver Layer
+ (Service Account+Scopes)      (5 Tablas Fuente)         (movements, payments, subcat)     (finance_silver_layer)
 ```
 
 ### 1. Conexión (`acceso/bq_client.py`)
-- Carga las credenciales de `service_account.json`.
-- Configura los scopes requeridos (`bigquery`, `drive`, `spreadsheets`) para consultar tablas externas vinculadas a Google Sheets sin problemas de permisos.
+- Autentica mediante `service_account.json`.
+- Configura los scopes de OAuth requeridos (`bigquery`, `drive`, `spreadsheets`) para consultar tablas externas vinculadas a Google Sheets sin errores de permisos.
 
 ### 2. Extracción (`apps/extractor.py`)
-Ejecuta las siguientes 5 consultas SQL en BigQuery:
+Ejecuta las siguientes consultas SQL sobre las tablas fuente en `fincasio_v2`:
 - **Movimientos:** `SELECT * FROM \`fincasio_v2.budget_movements\``
 - **Plan de Pagos:** `SELECT * FROM \`fincasio_v2.budget_payments\``
 - **Categorías:** `SELECT * FROM \`fincasio_v2.categories\``
@@ -57,83 +59,94 @@ Ejecuta las siguientes 5 consultas SQL en BigQuery:
 - **Métodos de Pago:** `SELECT * FROM \`fincasio_v2.payment_methods\``
 
 ### 3. Transformación y Unificación (`apps/transformer.py`)
-- **Limpieza:** Filtra filas vacías generadas automáticamente por Google Sheets.
+- **Limpieza de Nulos:** Filtra automáticamente filas vacías procedentes de Google Sheets para evitar duplicidades o productos cartesianos.
 - **Tipos de Datos:** Convierte montos a numéricos (`float`), cuotas a enteros (`int`) y fechas a `datetime`.
-- **Enriquecimiento `movements`:** Une movimientos con nombres de categorías, subcategorías y métodos de pago.
-- **Enriquecimiento `payments`:** Une cada pago con las dimensiones de su movimiento origen (relación 1:N).
-- **Enriquecimiento `subcategories`:** Une el catálogo de subcategorías con la información y tipo de su categoría padre.
+- **Estructuración de Tablas:**
+  - `movements`: Se une con `categories`, `subcategories` y `payment_methods`.
+  - `payments`: Se une con la información del movimiento padre (relación 1:N).
+  - `subcategories`: Se une con el catálogo de categorías padre.
+
+### 4. Carga a BigQuery (`apps/loader.py`)
+Carga los 3 DataFrames al dataset `finance_silver_layer` con disposición `WRITE_TRUNCATE` (reemplazo de snapshot diario/ejecución):
+- `df_movements` $\longrightarrow$ `finance_silver_layer.ft_budget_movements`
+- `df_payments` $\longrightarrow$ `finance_silver_layer.ft_budget_payments`
+- `df_subcategories` $\longrightarrow$ `finance_silver_layer.dim_budget_subcategories`
 
 ---
 
-## 📊 Descripción de los DataFrames Generados
+## 📊 Descripción de los Modelos de Datos
 
-### [1] Tabla `movements` (Movimientos Presupuestados)
-- **Granularidad:** 1 fila = 1 movimiento presupuestado.
-- **Columnas:**
-  - `movement_id`
-  - `movement_type`
-  - `movement_date`
-  - `movement_description`
-  - `movement_amount`
-  - `installments`
-  - `category_id`
-  - `category_name`
-  - `subcategory_id`
-  - `subcategory_name`
-  - `payment_method_id`
-  - `payment_method_name`
+### [1] `ft_budget_movements` (12 columnas)
+| Columna | Tipo | Descripción |
+| :--- | :--- | :--- |
+| `movement_id` | String | Identificador único del movimiento presupuestado |
+| `movement_type` | String | Tipo de movimiento (ej. 'Ingreso', 'Gasto') |
+| `movement_date` | Timestamp | Fecha del movimiento presupuestado |
+| `movement_description` | String | Descripción del movimiento |
+| `movement_amount` | Float | Monto total del movimiento |
+| `installments` | Integer | Número de parcialidades/cuotas |
+| `category_id` | String | Identificador de la categoría |
+| `category_name` | String | Nombre de la categoría (ej. 'Trabajo', 'Tecnologia') |
+| `subcategory_id` | String | Identificador de la subcategoría |
+| `subcategory_name` | String | Nombre de la subcategoría |
+| `payment_method_id` | String | Identificador del método de pago |
+| `payment_method_name` | String | Nombre del método de pago (ej. 'HSBC Debito', 'HSBC 2Now') |
 
-### [2] Tabla `payments` (Calendario de Pagos 1:N)
-- **Granularidad:** 1 fila = 1 pago / cuota individual.
-- **Relación 1:N:** Si un movimiento es de \$6,000 a 3 cuotas, en `movements` genera 1 fila y en `payments` genera 3 filas de \$2,000 con sus fechas de vencimiento.
-- **Columnas:**
-  - `payment_id`
-  - `budget_movement_id`
-  - `payment_date`
-  - `payment_amount`
-  - `payment_description`
-  - `movement_type`
-  - `movement_date`
-  - `category_id`
-  - `category_name`
-  - `subcategory_id`
-  - `subcategory_name`
-  - `payment_method_id`
-  - `payment_method_name`
+### [2] `ft_budget_payments` (13 columnas - Relación 1:N)
+| Columna | Tipo | Descripción |
+| :--- | :--- | :--- |
+| `payment_id` | String | Identificador único del pago/cuota |
+| `budget_movement_id` | String | Llave foránea al movimiento presupuestado origen |
+| `payment_date` | Timestamp | Fecha programada del pago |
+| `payment_amount` | Float | Monto específico de la cuota/pago |
+| `payment_description` | String | Descripción del pago individual |
+| `movement_type` | String | Tipo de movimiento heredado |
+| `movement_date` | Timestamp | Fecha del movimiento presupuestado origen |
+| `category_id` | String | Identificador de la categoría |
+| `category_name` | String | Nombre de la categoría |
+| `subcategory_id` | String | Identificador de la subcategoría |
+| `subcategory_name` | String | Nombre de la subcategoría |
+| `payment_method_id` | String | Identificador del método de pago |
+| `payment_method_name` | String | Nombre del método de pago |
 
-### [3] Tabla `subcategories` (Subcategorías con Categorías)
-- **Granularidad:** 1 fila = 1 subcategoría.
-- **Columnas:**
-  - `subcategory_id`
-  - `subcategory_name`
-  - `subcategory_description`
-  - `subcategory_is_active`
-  - `category_id`
-  - `category_name`
-  - `category_type`
-  - `category_is_active`
+### [3] `dim_budget_subcategories` (8 columnas)
+| Columna | Tipo | Descripción |
+| :--- | :--- | :--- |
+| `subcategory_id` | String | Identificador único de la subcategoría |
+| `subcategory_name` | String | Nombre de la subcategoría |
+| `subcategory_description` | String | Detalle/descripción de la subcategoría |
+| `subcategory_is_active` | Boolean | Estado activo/inactivo de la subcategoría |
+| `category_id` | String | Identificador de la categoría padre |
+| `category_name` | String | Nombre de la categoría |
+| `category_type` | String | Tipo de categoría (ej. 'Ingreso', 'Gasto') |
+| `category_is_active` | Boolean | Estado activo/inactivo de la categoría |
 
 ---
 
-## 🚀 Instalación y Uso
+## 🚀 Instalación y Ejecución
 
 ### 1. Instalar dependencias
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Ejecutar el pipeline desde la terminal
+### 2. Ejecutar el pipeline completo (ETL + Carga a BigQuery)
 ```bash
 python3 main.py
 ```
 
 **Salida en consola:**
 ```text
-13:20:11 | INFO | Iniciando Pipeline ETL...
-13:20:11 | INFO | [1/3] Conectando con BigQuery / Google Sheets...
-13:20:11 | INFO | [2/3] Extrayendo tablas fuente desde BigQuery...
-13:20:26 | INFO | [3/3] Limpiando, enriqueciendo y unificando datos...
-13:20:26 | INFO | Pipeline completado exitosamente.
+13:47:30 | INFO | Iniciando Pipeline ETL de Presupuesto Personal...
+13:47:30 | INFO | [1/4] Conectando con BigQuery / Google Sheets...
+13:47:30 | INFO | [2/4] Extrayendo tablas fuente desde BigQuery...
+13:47:44 | INFO | [3/4] Limpiando, enriqueciendo y unificando datos...
+13:47:44 | INFO | [4/4] Cargando tablas a BigQuery (Dataset: 'finance_silver_layer')...
+13:47:44 | INFO | [1/3] Cargando 'ft_budget_movements' a finance_silver_layer (465 registros)...
+13:47:48 | INFO | [2/3] Cargando 'ft_budget_payments' a finance_silver_layer (476 registros)...
+13:47:51 | INFO | [3/3] Cargando 'dim_budget_subcategories' a finance_silver_layer (48 registros)...
+13:47:54 | INFO | ✓ Carga completa: 3 tablas actualizadas en dataset 'finance_silver_layer'.
+13:47:54 | INFO | Pipeline completado exitosamente.
 
 =================================================================
         RESULTADOS DEL PROCESO ETL - BUDGET PERSONAL
@@ -155,23 +168,29 @@ python3 main.py
       • Columnas generadas   : 8
       • Subcategorías activas: 48
 =================================================================
-  ✓ DataFrames listos en memoria para análisis exploratorio (EDA).
+  ✓ Tablas actualizadas en BigQuery (Silver Layer):
+      • ft_budget_movements       ──► `nicapp-467321.finance_silver_layer.ft_budget_movements`
+      • ft_budget_payments        ──► `nicapp-467321.finance_silver_layer.ft_budget_payments`
+      • dim_budget_subcategories  ──► `nicapp-467321.finance_silver_layer.dim_budget_subcategories`
+=================================================================
 ```
 
-### 3. Importar en un Jupyter Notebook o script para Análisis Exploratorio (EDA)
+### 3. Uso en Jupyter Notebook / Python (Modo solo lectura para EDA)
+Si deseas obtener los DataFrames en memoria sin realizar la carga a BigQuery:
+
 ```python
 from main import get_budget_dataframes
 
-# Obtiene los tres DataFrames limpios
+# Obtiene los DataFrames en memoria
 df_movements, df_payments, df_subcategories = get_budget_dataframes()
 
-# Listo para análisis exploratorio
+# Análisis exploratorio
 print(df_movements.head())
 print(df_payments.head())
 print(df_subcategories.head())
 ```
 
-### 4. Ejecutar pruebas automatizadas
+### 4. Ejecutar pruebas unitarias
 ```bash
 python3 -m unittest tests/test_pipeline.py
 ```
