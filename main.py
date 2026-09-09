@@ -146,8 +146,8 @@ def main():
     try:
         df_movements, df_payments, df_subcategories, uploaded_tables = run_pipeline(upload_to_bq=True)
         print_summary(df_movements, df_payments, df_subcategories, uploaded_tables)
-    except Exception as e:
-        logger.exception(f"Error durante la ejecución del pipeline: {e}")
+    except Exception:
+        logger.exception("Error durante la ejecución del pipeline")
         sys.exit(1)
 
 
