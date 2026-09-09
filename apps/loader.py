@@ -1,7 +1,7 @@
 import logging
 
-from google.cloud import bigquery
 import pandas as pd
+from google.cloud import bigquery
 
 from acceso.bq_client import get_bigquery_client
 

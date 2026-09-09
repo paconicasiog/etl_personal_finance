@@ -28,6 +28,7 @@ etl_personal_finance/
 ├── tests/
 │   ├── __init__.py
 │   └── test_pipeline.py          # Pruebas unitarias de integridad 1:N, tipos y columnas
+├── analisis_budget.ipynb         # Notebook interactivo para Análisis Exploratorio (EDA)
 ├── main.py                       # Orquestador principal del pipeline (ETL + Carga a BQ)
 ├── upload_to_bq.py               # Script dedicado para ejecución y carga a la capa Silver
 ├── requirements.txt              # Dependencias de Python
@@ -123,6 +124,50 @@ Carga los 3 DataFrames al dataset `finance_silver_layer` con disposición `WRITE
 
 ---
 
+## 📈 Análisis Exploratorio en Notebook (`analisis_budget.ipynb`)
+
+El notebook [`analisis_budget.ipynb`](analisis_budget.ipynb) proporciona una suite de análisis visual y financiero basada en `pandas`, `numpy`, `matplotlib` y `seaborn`:
+
+### 1. Tablas Dinámicas de Gasto Mes a Mes (`type == 'Gasto'`)
+- **Movements vs Payments**: Muestra el gasto mensual comprometido (`movements`) contra el desembolso real de cuotas (`payments`), calculando automáticamente la columna de **Diferencia por Diferimiento**.
+- **Gastos por Categoría y Mes**: Matriz mensual desglosada por categoría a nivel `payments` para identificar picos de gasto.
+
+### 2. Visualización Acumulada: Gasto vs Ingreso
+- **Curvas acumuladas temporales** para `movements` y `payments` contrastando ingresos acumulados, gastos acumulados y balance neto.
+- **Gráfico comparativo de Gasto Acumulado** con sombreado de área que muestra la holgura de liquidez generada por las compras a meses sin intereses (MSI) y cuotas diferidas.
+
+### 3. Análisis de Gastos por Categoría y Método de Pago
+- **Barras horizontales ordenadas por categoría** con montos monetarios formateados (\$ MXN).
+- **Barras de distribución del gasto por Método de Pago** (identificando uso de tarjetas de crédito vs débito).
+- **Heatmap (Matriz Cruzada)**: Mapa de calor de Categorías vs Métodos de Pago para visualizar qué instrumentos financieros financian cada rubro del presupuesto.
+
+---
+
+## 🔌 Carga de Datos con `from main import get_budget_dataframes`
+
+Para realizar análisis exploratorios, notebooks o scripts personalizados sin escribir datos a BigQuery, se utiliza la función modular `get_budget_dataframes()`:
+
+### ¿Cómo funciona internamente?
+1. **Autenticación con Scopes:** Se conecta a BigQuery y Google Drive/Sheets mediante las credenciales de `service_account.json`.
+2. **Extracción en Vivo:** Ejecuta las 5 consultas SQL sobre las tablas fuente en `fincasio_v2`.
+3. **Limpieza y Enriquecimiento:** Estandariza tipos (`datetime`, `float`, `int`), elimina filas vacías y ejecuta los joins dimensionales de categorías, subcategorías y métodos de pago.
+4. **Modo Solo Lectura en Memoria:** Invoca internamente `run_pipeline(upload_to_bq=False)`, retornando los 3 DataFrames procesados directamente en memoria de Python sin modificar las tablas de BigQuery.
+
+### Ejemplo de Uso:
+```python
+from main import get_budget_dataframes
+
+# Carga los tres DataFrames limpios en memoria
+df_movements, df_payments, df_subcategories = get_budget_dataframes()
+
+# Listos para trabajar con Pandas
+print("Movimientos:", df_movements.shape)
+print("Pagos:", df_payments.shape)
+print("Subcategorías:", df_subcategories.shape)
+```
+
+---
+
 ## 🚀 Instalación y Ejecución
 
 ### 1. Instalar dependencias
@@ -175,22 +220,7 @@ python3 main.py
 =================================================================
 ```
 
-### 3. Uso en Jupyter Notebook / Python (Modo solo lectura para EDA)
-Si deseas obtener los DataFrames en memoria sin realizar la carga a BigQuery:
-
-```python
-from main import get_budget_dataframes
-
-# Obtiene los DataFrames en memoria
-df_movements, df_payments, df_subcategories = get_budget_dataframes()
-
-# Análisis exploratorio
-print(df_movements.head())
-print(df_payments.head())
-print(df_subcategories.head())
-```
-
-### 4. Ejecutar pruebas unitarias
+### 3. Ejecutar pruebas unitarias
 ```bash
 python3 -m unittest tests/test_pipeline.py
 ```

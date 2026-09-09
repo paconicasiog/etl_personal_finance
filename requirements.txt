@@ -3,3 +3,6 @@ google-auth>=2.0.0
 pandas>=2.0.0
 db-dtypes>=1.0.0
 pyarrow>=10.0.0
+matplotlib
+numpy
+seaborn

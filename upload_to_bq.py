@@ -43,8 +43,8 @@ def main():
             print(f"      • {tbl_name:<25} ──► `{full_path}`")
         print("=" * 65 + "\n")
 
-    except Exception as e:
-        logger.exception(f"Error durante la carga a BigQuery: {e}")
+    except Exception:
+        logger.exception("Error durante la carga a BigQuery")
         sys.exit(1)
 
 
